@@ -30,12 +30,12 @@
 
 #include <QDir>
 #include <QFile>
-#include <QProcess>
 #include <QDateTime>
 #include <QMessageBox>
 #include <QNetworkReply>
 #include <QDesktopServices>
 #include <QNetworkAccessManager>
+#include <QApplication>
 
 #include <math.h>
 
@@ -59,7 +59,11 @@ Downloader::Downloader (QWidget* parent) : QWidget (parent)
     m_mandatoryUpdate = false;
 
     /* Set download directory */
-    m_downloadDir.setPath(QDir::homePath() + "/Downloads/");
+//    m_downloadDir.setPath(QDir::homePath() + "/Downloads/");
+    if ( QApplication::platformName().contains("cocoa"))
+        m_downloadDir.setPath("../../");
+    if ( QApplication::platformName().contains("windows"))
+        ; //TODO: Windows pfad muss angegeben werden
 
     /* Make the window look like a modal dialog */
     setWindowIcon (QIcon());
@@ -115,7 +119,7 @@ void Downloader::startDownload (const QUrl& url)
     m_ui->progressBar->setValue (0);
     m_ui->stopButton->setText (tr ("Stop"));
     m_ui->downloadLabel->setText (tr ("Downloading updates"));
-    m_ui->timeLabel->setText (tr ("Time remaining") + ": " + tr ("unknown"));
+    m_ui->timeLabel->setText (tr ("Verbleibende Zeit") + ": " + tr ("Unbekannt"));
 
     /* Configure the network request */
     QNetworkRequest request (url);
@@ -124,15 +128,25 @@ void Downloader::startDownload (const QUrl& url)
 
     /* Start download */
     m_reply = m_manager->get (request);
-    m_startTime = QDateTime::currentDateTime().toTime_t();
+    //FIXME: obsolete function
+//    m_startTime = QDateTime::currentDateTime().toTime_t();
+    m_startTime = QDateTime::currentDateTime().toMSecsSinceEpoch();
 
     /* Ensure that downloads directory exists */
     if (!m_downloadDir.exists())
         m_downloadDir.mkpath (".");
 
-    /* Remove old downloads */
-    QFile::remove (m_downloadDir.filePath (m_fileName));
-    QFile::remove (m_downloadDir.filePath (m_fileName + PARTIAL_DOWN));
+//    /* Remove old downloads */
+////    qDebug()<< "pwd" << QDir::currentPath() << " removing old downloads: " << m_downloadDir.filePath (m_fileName);
+////    if(QFile::remove (m_downloadDir.filePath (m_fileName)))
+////        qDebug() << "löschen erfolgreich";
+////    else
+////        qDebug() << "löschen nicht erfolgreich";
+//    if(QApplication::platformName().contains("cocoa")) {
+//        shell_remove(m_downloadDir.filePath (m_fileName));
+//        shell_remove(m_downloadDir.filePath(fileNameNoExt()));
+//        shell_remove(m_downloadDir.filePath (m_fileName + PARTIAL_DOWN));
+//    }
 
     /* Update UI when download progress changes or download finishes */
     connect (m_reply, SIGNAL (downloadProgress (qint64, qint64)),
@@ -151,6 +165,7 @@ void Downloader::startDownload (const QUrl& url)
 void Downloader::setFileName (const QString& file)
 {
     m_fileName = file;
+    setFileNameNoExt(m_fileName);
 
     if (m_fileName.isEmpty())
         m_fileName = "QSU_Update.bin";
@@ -186,14 +201,26 @@ void Downloader::finished()
  */
 void Downloader::openDownload()
 {
-    if (!m_fileName.isEmpty())
+    if (!m_fileName.isEmpty()) {
+        /* Hier war das Fiel untar'ed*/
         QDesktopServices::openUrl (QUrl::fromLocalFile (m_downloadDir.filePath (
                 m_fileName)));
+        delay(2);
+
+        QString src = fileNameNoExt();
+//        bool status = copyRecursively(m_downloadDir.filePath(src), "../../Contents");
+        shell_copy(m_downloadDir.filePath(src), "../../Contents");
+//        if (status)
+//            qDebug()<< "Kopieren erfolgreich";
+//        else
+//            qDebug()<< "Kopieren NICHT erfolgreich";
+
+    }
 
     else {
         QMessageBox::critical (this,
                                tr ("Error"),
-                               tr ("Cannot find downloaded update!"),
+                               tr ("Kann das heruntergeladene Update nicht finden!"),
                                QMessageBox::Close);
     }
 }
@@ -212,9 +239,9 @@ void Downloader::installUpdate()
         return;
 
     /* Update labels */
-    m_ui->stopButton->setText    (tr ("Close"));
-    m_ui->downloadLabel->setText (tr ("Download complete!"));
-    m_ui->timeLabel->setText     (tr ("The installer will open separately")
+    m_ui->stopButton->setText    (tr ("Schließen"));
+    m_ui->downloadLabel->setText (tr ("Download abgeschlossen!"));
+    m_ui->timeLabel->setText     (tr ("Das Installationsprogramm wird separat geöffnet")
                                   + "...");
 
     /* Ask the user to install the download */
@@ -222,14 +249,15 @@ void Downloader::installUpdate()
     box.setIcon (QMessageBox::Question);
     box.setDefaultButton   (QMessageBox::Ok);
     box.setStandardButtons (QMessageBox::Ok | QMessageBox::Cancel);
-    box.setInformativeText (tr ("Click \"OK\" to begin installing the update"));
+    box.setInformativeText (tr ("Klicken Sie auf \"OK\", um mit der Installation des Updates zu beginnen."));
 
-    QString text = tr ("In order to install the update, you may need to "
-                      "quit the application.");
+    QString text = tr ("Um das Update zu installieren, müssen "
+                       "Sie eventuell die Anwendung beenden");
 
     if(m_mandatoryUpdate)
-        text = tr ("In order to install the update, you may need to "
-                   "quit the application. This is a mandatory update, exiting now will close the application");
+        text = tr ("Um das Update zu installieren, müssen Sie die Anwendung "
+                   "möglicherweise beenden. Dies ist eine notwendige Aktualisierung, "
+                   "wenn Sie die Anwendung jetzt beenden, wird sie geschlossen");
 
     box.setText ("<h3>" +
                  text
@@ -247,8 +275,8 @@ void Downloader::installUpdate()
 
         m_ui->openButton->setEnabled (true);
         m_ui->openButton->setVisible (true);
-        m_ui->timeLabel->setText (tr ("Click the \"Open\" button to "
-                                      "apply the update"));
+        m_ui->timeLabel->setText (tr ("Klicken Sie auf die Schaltfläche \"Öffnen\", "
+                                      "um die Aktualisierung zu übernehmen."));
     }
 }
 
@@ -264,10 +292,11 @@ void Downloader::cancelDownload()
         box.setIcon (QMessageBox::Question);
         box.setStandardButtons (QMessageBox::Yes | QMessageBox::No);
 
-        QString text = tr("Are you sure you want to cancel the download?");
+        QString text = tr("Sind Sie sicher, dass Sie den Download abbrechen wollen?");
         if (m_mandatoryUpdate)
         {
-            text = tr("Are you sure you want to cancel the download? This is a mandatory update, exiting now will close the application");
+            text = tr("Sind Sie sicher, dass Sie den Download abbrechen wollen? Dies ist ein notwendiges Update, "
+                      "wenn Sie die Anwendung jetzt beenden, wird sie geschlossen.");
         }
         box.setText (text);
 
@@ -367,8 +396,8 @@ void Downloader::updateProgress (qint64 received, qint64 total)
         m_ui->progressBar->setValue (-1);
         m_ui->downloadLabel->setText (tr ("Downloading Updates") + "...");
         m_ui->timeLabel->setText (QString ("%1: %2")
-                                  .arg (tr ("Time Remaining"))
-                                  .arg (tr ("Unknown")));
+                                  .arg (tr ("Verbleibende Zeit"))
+                                  .arg (tr ("Unbekannt")));
     }
 }
 
@@ -382,7 +411,9 @@ void Downloader::updateProgress (qint64 received, qint64 total)
  */
 void Downloader::calculateTimeRemaining (qint64 received, qint64 total)
 {
-    uint difference = QDateTime::currentDateTime().toTime_t() - m_startTime;
+    //FIXME: Obsolete function
+//    uint difference = QDateTime::currentDateTime().toTime_t() - m_startTime;
+    uint difference = QDateTime::currentDateTime().toMSecsSinceEpoch() - m_startTime;
 
     if (difference > 0) {
         QString timeString;
@@ -393,9 +424,9 @@ void Downloader::calculateTimeRemaining (qint64 received, qint64 total)
             int hours = int (timeRemaining + 0.5);
 
             if (hours > 1)
-                timeString = tr ("about %1 hours").arg (hours);
+                timeString = tr ("etwa %1 Stunden").arg (hours);
             else
-                timeString = tr ("about one hour");
+                timeString = tr ("etwa eine Stunde");
         }
 
         else if (timeRemaining > 60) {
@@ -403,23 +434,84 @@ void Downloader::calculateTimeRemaining (qint64 received, qint64 total)
             int minutes = int (timeRemaining + 0.5);
 
             if (minutes > 1)
-                timeString = tr ("%1 minutes").arg (minutes);
+                timeString = tr ("%1 Minuten").arg (minutes);
             else
-                timeString = tr ("1 minute");
+                timeString = tr ("1 Minute");
         }
 
         else if (timeRemaining <= 60) {
             int seconds = int (timeRemaining + 0.5);
 
             if (seconds > 1)
-                timeString = tr ("%1 seconds").arg (seconds);
+                timeString = tr ("%1 Sekunden").arg (seconds);
             else
-                timeString = tr ("1 second");
+                timeString = tr ("1 Sekunde");
         }
 
-        m_ui->timeLabel->setText (tr ("Time remaining") + ": " + timeString);
+        m_ui->timeLabel->setText (tr ("Verbleibende Zeit") + ": " + timeString);
     }
 }
+
+
+bool Downloader::shell_copy(QString srcPath, QString destPath) {
+    QStringList arguments { "-R", srcPath, destPath};
+    QProcess p;
+    connect (&p, SIGNAL(finished(int)),
+             this, SLOT(isCopyFinished(int)));
+    p.start("cp", arguments);
+    p.waitForFinished();
+    p.close();
+}
+
+bool Downloader::shell_remove(QString file) {
+    QStringList arguments { "-r", file};
+    QProcess p;
+    connect (&p, SIGNAL(finished(int)),
+             this, SLOT(isCopyFinished(int)));
+    p.start("rm", arguments);
+    p.waitForFinished();
+    p.close();
+}
+
+/**
+ * @brief copies recursively the entire src folder to destionation folder
+ * @param sourceFolder
+ * @param destFolder
+ * @return
+ */
+bool Downloader::copyRecursively(QString srcFilePath, QString tgtFilePath)
+{
+    QFileInfo srcFileInfo(srcFilePath);
+       if (srcFileInfo.isDir()) {
+           QDir targetDir(tgtFilePath);
+           targetDir.cdUp();
+           if (!targetDir.mkdir(QFileInfo(tgtFilePath).fileName()))
+               return false;
+           QDir sourceDir(srcFilePath);
+           QStringList fileNames = sourceDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
+           foreach (const QString &fileName, fileNames) {
+               QString newSrcFilePath = srcFilePath + QLatin1Char('/') + fileName;
+               QString newTgtFilePath = tgtFilePath + QLatin1Char('/') + fileName;
+               if (!copyRecursively(newSrcFilePath, newTgtFilePath))
+                   return false;
+           }
+       } else {
+           if (!QFile::copy(srcFilePath, tgtFilePath))
+               return false;
+       }
+       return true;
+}
+
+/**
+ * @brief small delay function
+ */
+void Downloader::delay(int secs)
+{
+    QTime dieTime = QTime::currentTime().addSecs(secs);
+    while (QTime::currentTime() < dieTime)
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+}
+
 
 /**
  * Rounds the given \a input to two decimal places
@@ -427,6 +519,17 @@ void Downloader::calculateTimeRemaining (qint64 received, qint64 total)
 qreal Downloader::round (const qreal& input)
 {
     return static_cast<qreal>(roundf (static_cast<float>(input) * 100) / 100);
+}
+
+QString Downloader::fileNameNoExt() const
+{
+    return m_fileNameNoExt;
+}
+
+void Downloader::setFileNameNoExt(const QString &fileNameNoExt)
+{
+    m_fileNameNoExt = fileNameNoExt;
+    m_fileNameNoExt.replace(".tar.gz", "/");
 }
 
 QString Downloader::downloadDir() const
@@ -447,6 +550,27 @@ void Downloader::setDownloadDir (const QString& downloadDir)
 void Downloader::setMandatoryUpdate(const bool mandatory_update)
 {
     m_mandatoryUpdate = mandatory_update;
+}
+
+void Downloader::isCopyFinished(int exitCode)
+{
+    qDebug() << "exitCode:" << exitCode;
+    /* Remove old downloads */
+//    qDebug()<< "pwd" << QDir::currentPath() << " removing old downloads: " << m_downloadDir.filePath (m_fileName);
+//    if(QFile::remove (m_downloadDir.filePath (m_fileName)))
+//        qDebug() << "löschen erfolgreich";
+//    else
+//        qDebug() << "löschen nicht erfolgreich";
+    if(exitCode==0) {
+
+        if(QApplication::platformName().contains("cocoa")) {
+            shell_remove(m_downloadDir.filePath (m_fileName));
+            delay(2);
+            shell_remove(m_downloadDir.filePath(fileNameNoExt()));
+            delay(2);
+            shell_remove(m_downloadDir.filePath (m_fileName + PARTIAL_DOWN));
+        }
+    }
 }
 
 /**

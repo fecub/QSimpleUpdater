@@ -431,14 +431,14 @@ void Updater::setUpdateAvailable (const bool available)
 
     if (updateAvailable() && (notifyOnUpdate() || notifyOnFinish()))
     {
-        QString text = tr("Would you like to download the update now?");
+        QString text = tr("Möchten Sie das Update jetzt herunterladen?");
         if (m_mandatoryUpdate)
         {
-            text = tr ("Would you like to download the update now? This is a mandatory update, exiting now will close the application");
+            text = tr ("Möchten Sie das Update jetzt herunterladen? Dies ist ein notwendiges Update, wenn Sie die Anwendung jetzt beenden, wird sie geschlossen.");
         }
 
         QString title = "<h3>"
-                        + tr ("Version %1 of %2 has been released!")
+                        + tr ("Version %1 of %2 wurde freigegeben!")
                         .arg (latestVersion()).arg (moduleName())
                         + "</h3>";
 
@@ -471,10 +471,9 @@ void Updater::setUpdateAvailable (const bool available)
 
     else if (notifyOnFinish()) {
         box.setStandardButtons (QMessageBox::Close);
-        box.setInformativeText (tr ("No updates are available for the moment"));
+        box.setInformativeText (tr ("Momentan sind keine Updates verfügbar."));
         box.setText ("<h3>"
-                     + tr ("Congratulations! You are running the "
-                           "latest version of %1").arg (moduleName())
+                     + tr ("Sie benutzen die neueste Version von %1").arg (moduleName())
                      + "</h3>");
 
         box.exec();

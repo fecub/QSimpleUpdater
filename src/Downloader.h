@@ -34,6 +34,8 @@
 #include <QDir>
 #include <QDialog>
 #include <ui_Downloader.h>
+#include <QObject>
+#include <QProcess>
 
 namespace Ui {
 class Downloader;
@@ -61,6 +63,14 @@ public:
     QString downloadDir() const;
     void setDownloadDir (const QString& downloadDir);
 
+    QString fileNameNoExt() const;
+    void setFileNameNoExt(const QString &fileNameNoExt);
+
+    bool copyRecursively(QString srcFilePath, QString tgtFilePath);
+    bool shell_copy(QString srcPath, QString destPath);
+    bool shell_remove(QString file);
+    void delay(int secs);
+
 public slots:
     void setUrlId (const QString& url);
     void startDownload (const QUrl& url);
@@ -68,6 +78,7 @@ public slots:
     void setUserAgentString (const QString& agent);
     void setUseCustomInstallProcedures (const bool custom);
     void setMandatoryUpdate (const bool mandatory_update);
+    void isCopyFinished(int exitCode);
 
 private slots:
     void finished();
@@ -87,6 +98,7 @@ private:
     uint m_startTime;
     QDir m_downloadDir;
     QString m_fileName;
+    QString m_fileNameNoExt;
     Ui::Downloader* m_ui;
     QNetworkReply* m_reply;
     QString m_userAgentString;
